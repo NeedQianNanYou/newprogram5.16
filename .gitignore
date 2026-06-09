@@ -1,0 +1,7 @@
+.env
+uploads/
+__pycache__/
+*.pyc
+paper_*.json
+_ocr_debug.txt
+_test_ai.py

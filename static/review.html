@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>听写批改</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#eee;min-height:100vh}
+.h{background:#16213e;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+.h h1{font-size:17px}.h .st{font-size:12px;color:#8ab4f8}
+.c{margin:0 auto;max-width:900px;padding:14px}
+
+.tip{background:#2d1f0a;color:#ff9800;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:14px}
+.up{border:2px dashed #444;border-radius:10px;padding:34px;text-align:center;cursor:pointer;background:#16213e;margin-bottom:12px;transition:.2s}
+.up:hover{border-color:#8ab4f8}
+.up .ic{font-size:38px;margin-bottom:6px}.up .tx{color:#aaa;font-size:14px}.up .hi{color:#666;font-size:12px;margin-top:4px}
+.pl{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.pi{width:66px;height:92px;border-radius:6px;overflow:hidden;border:2px solid #333}
+.pi img{width:100%;height:100%;object-fit:cover}
+
+.btn{padding:14px 24px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+.b1{background:#8ab4f8;color:#1a1a2e;width:100%}.b1:hover{background:#a0c4ff}.b1:disabled{background:#444;color:#777;cursor:not-allowed}
+.b2{background:transparent;border:1px solid #555;color:#aaa;padding:10px 18px;font-size:13px}
+
+.pg{display:none;text-align:center;padding:30px}
+.sp{width:32px;height:32px;border:3px solid #333;border-top-color:#8ab4f8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.sm{display:none;background:#16213e;border-radius:10px;padding:18px;margin-bottom:14px}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.si{padding:12px;border-radius:8px}.si .n{font-size:28px;font-weight:700}.si .l{font-size:11px;color:#888;margin-top:2px}
+.gn{background:#0a3d1a}.gn .n{color:#4caf50}
+.ye{background:#3d2a0a}.ye .n{color:#ff9800}
+.rd{background:#3d0a0a}.rd .n{color:#f44336}
+
+.sl{display:none}
+.sc{background:#16213e;border-radius:8px;padding:14px 16px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.sc:hover{background:#1e2d50}
+.sc .sn{font-weight:600;font-size:14px}.sc .si2{font-size:12px;color:#888}
+.sc .st2{text-align:right}.sc .st2 .td{color:#ff9800;font-weight:600;font-size:13px}
+
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;z-index:100;flex-direction:column}
+.modal.on{display:flex}
+.mh{background:#16213e;padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
+.mp{background:#333;height:3px}.mpb{background:#8ab4f8;height:100%;transition:.3s}
+.mb{flex:1;overflow-y:auto;padding:18px;max-width:680px;margin:0 auto;width:100%}
+.mi{background:#16213e;border-radius:8px;padding:18px;margin-bottom:10px;border-left:4px solid #ff9800}
+.mi .qn{font-size:11px;color:#888;margin-bottom:6px}
+.mi .wd{font-size:20px;font-weight:700;margin-bottom:2px}
+.mi .cz{font-size:15px;color:#4caf50;margin-bottom:10px}
+.mi .sw{font-size:15px;padding:8px 12px;background:#0d1117;border-radius:6px;margin-bottom:10px}
+.mi .sw.er{color:#f44336}.mi .sw.ok{color:#4caf50}
+.ma{display:flex;gap:8px}
+.bw{flex:1;background:#f44336;color:#fff}.bw:hover{background:#d32f2f}
+.bg{flex:1;background:#4caf50;color:#fff}.bg:hover{background:#388e3c}
+.bs{background:#555;color:#ccc}.bs:hover{background:#666}
+.mf{background:#16213e;padding:12px 18px;text-align:center}
+.emp{text-align:center;padding:50px;color:#888}.emp .bi{font-size:42px}
+
+@media(max-width:600px){.c{padding:10px}.mi{padding:14px}}
+</style>
+</head>
+<body>
+
+<div class="h"><h1>听写批改</h1><span class="st" id="hs"></span></div>
+<div class="c">
+  <div class="tip">AI 先判全部题，<b>对的自动过</b>。你只复核<b>错题和存疑</b>（约 10-20 题），键盘 ← → 快速判定。</div>
+  <div class="up" id="up"><div class="ic">&#128206;</div><div class="tx">上传听写纸照片（可多张）</div><div class="hi">手机/电脑均可</div></div>
+  <input type="file" id="fi" accept="image/*" multiple capture="environment" style="display:none">
+  <div class="pl" id="pl"></div>
+  <button class="btn b1" id="gb" disabled>AI 初筛 (<span id="ct">0</span> 张)</button>
+  <div class="pg" id="pg"><div class="sp"></div><div style="color:#aaa;font-size:13px">AI 正在判题...</div></div>
+  <div class="sm" id="sm"></div>
+  <div class="btns" id="btns" style="display:none"><button class="btn b2" onclick="reGrade()" style="margin-right:8px">重新筛选</button><button class="btn b2" onclick="reset()">重新上传</button></div>
+  <div class="sl" id="sl"></div>
+</div>
+
+<div class="modal" id="mo">
+  <div class="mh"><h3 id="mt"></h3><button class="btn b2" onclick="cl()">返回列表</button></div>
+  <div class="mp"><div class="mpb" id="mb" style="width:0%"></div></div>
+  <div class="mb" id="my"></div>
+  <div class="mf"><button class="btn b2" onclick="cl()">完成复核</button></div>
+</div>
+
+<script>
+let files=[],allR={},rv={};
+
+const up=document.getElementById('up'),fi=document.getElementById('fi'),pl=document.getElementById('pl');
+const gb=document.getElementById('gb'),ct=document.getElementById('ct'),pg=document.getElementById('pg');
+const sm=document.getElementById('sm'),sl=document.getElementById('sl');
+
+up.onclick=()=>fi.click();
+up.ondragover=e=>{e.preventDefault();up.classList.add('dragover')};
+up.ondragleave=()=>up.classList.remove('dragover');
+up.ondrop=e=>{e.preventDefault();up.classList.remove('dragover');addFiles(e.dataTransfer.files)};
+fi.onchange=()=>addFiles(fi.files);
+
+function addFiles(fl){for(let f of fl)if(f.type.startsWith('image/'))files.push(f);render()}
+function render(){
+  pl.innerHTML='';files.forEach((f,i)=>{
+    const d=document.createElement('div');d.className='pi';
+    const img=document.createElement('img');img.src=URL.createObjectURL(f);d.appendChild(img);pl.appendChild(d);
+  });
+  gb.disabled=!files.length;ct.textContent=files.length;
+}
+
+gb.onclick=async()=>{
+  if(!files.length)return;
+  sm.style.display='none';sl.style.display='none';pg.style.display='block';gb.style.display='none';allR={};rv={};
+  const fd=new FormData();files.forEach(f=>fd.append('files',f));
+  try{
+    const r=await fetch('/api/grade',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!d.success){alert('批改失败');return}
+    d.summary.forEach(s=>{allR[s.name]=s.details;rv[s.name]={}});
+    show();
+  }catch(e){alert('请求失败: '+e.message)}
+  pg.style.display='none';gb.style.display='block';gb.disabled=true;
+};
+
+function show(){
+  sm.style.display='block';sl.style.display='block';btns.style.display='flex';
+  let tc=0,tr=0,tt=0;
+  Object.values(allR).forEach(d=>d.forEach(x=>{tt++;if(x['判定']==='对')tc++;else tr++}));
+  document.getElementById('hs').textContent=tc+'题自动通过 · '+tr+'题待复核';
+  sm.innerHTML=`<div class="sg">
+    <div class="si gn"><div class="n">${tc}</div><div class="l">自动通过（不看了）</div></div>
+    <div class="si ye"><div class="n">${tr}</div><div class="l">待你复核</div></div>
+    <div class="si rd"><div class="n">${tt?(tr/tt*100).toFixed(0):0}%</div><div class="l">需看比例</div></div>
+  </div>`;
+  sl.innerHTML='<div style="font-weight:600;margin-bottom:8px">学生列表 · 点击进入复核</div>';
+  Object.entries(allR).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([nm,dt])=>{
+    const tr2=dt.filter(d=>d['判定']!=='对').length;
+    const done=Object.keys(rv[nm]||{}).length;
+    const d=document.createElement('div');d.className='sc';
+    d.onclick=()=>open(nm);
+    d.innerHTML=`<div><div class="sn">${nm}</div><div class="si2">共${dt.length}题 · AI判对${dt.length-tr2}题</div></div>
+      <div class="st2">${tr2>0?`<div class="td">${tr2-done}题待复核</div>`:'<div style="color:#4caf50">✓ 完成</div>'}</div>`;
+    sl.appendChild(d);
+  });
+}
+
+function open(nm){
+  document.getElementById('mo').classList.add('on');
+  document.getElementById('mt').textContent=nm+' · 全部题目';
+  document.getElementById('mb').style.width='100%';
+  const items=allR[nm] || []; if(!items.length){document.getElementById('my').innerHTML='<div class="emp">无数据</div>';return}
+  items.sort((a,b)=>a['题号']-b['题号']);
+  const my=document.getElementById('my');
+  my.innerHTML=`
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="color:#888;font-size:11px"><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #333">题号</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #333">单词</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #333">正确答案</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #333">学生写了</th><th style="text-align:left;padding:8px 6px;border-bottom:1px solid #333">判定</th></tr>
+    `+items.map((d,i)=>`
+    <tr style="${d['判定']==='错'?'background:#2a1515':d['判定']==='存疑'?'background:#2a2010':''}">
+      <td style="padding:8px 6px;border-bottom:1px solid #222">${d['题号']}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #222;font-weight:600">${d['英文']||''}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #222;color:#4caf50">${d['正确翻译']||''}</td>
+      <td style="padding:8px 6px;border-bottom:1px solid #222;color:${d['判定']==='错'?'#f44336':d['判定']==='存疑'?'#ff9800':'#ccc'}">${d['学生写了']||''}</td>
+      <td style="padding:6px;border-bottom:1px solid #222">
+        <select onchange="fix('${nm}',${d['题号']},this.value)" style="background:#333;color:#eee;border:1px solid #555;border-radius:4px;padding:4px 6px;font-size:12px">
+          <option value="对" ${d['判定']==='对'?'selected':''}>对</option>
+          <option value="错" ${d['判定']==='错'?'selected':''}>错</option>
+          <option value="存疑" ${d['判定']==='存疑'?'selected':''}>存疑</option>
+        </select>
+      </td>
+    </tr>`).join('')+'</table>';}
+
+function fix(nm,qn,j){
+  rv[nm]=rv[nm]||{};rv[nm][qn]=j;
+  const idx=allR[nm].findIndex(x=>x['题号']===qn);if(idx>=0)allR[nm][idx]['判定']=j;
+}
+
+function cl(){document.getElementById('mo').classList.remove('on');show()}
+
+async function reGrade(){
+  sm.style.display='none';sl.style.display='none';btns.style.display='none';pg.style.display='block';gb.style.display='none';allR={};rv={};
+  const fd=new FormData();files.forEach(f=>fd.append('files',f));
+  try{
+    const r=await fetch('/api/grade',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!d.success){alert('批改失败');pg.style.display='none';gb.style.display='block';return}
+    d.summary.forEach(s=>{allR[s.name]=s.details;rv[s.name]={}});
+  }catch(e){alert('请求失败: '+e.message)}
+  pg.style.display='none';gb.style.display='block';gb.disabled=true;show();
+}
+
+function reset(){
+  files=[];fi.value='';allR={};rv={};render();
+  sm.style.display='none';sl.style.display='none';btns.style.display='none';pg.style.display='none';
+  gb.style.display='block';gb.disabled=true;
+}
+</script>
+</body>
+</html>

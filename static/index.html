@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>英语听写批改</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+.header{background:#1a73e8;color:#fff;padding:16px 20px;text-align:center;font-size:20px;font-weight:600;position:sticky;top:0;z-index:10}
+.container{max-width:900px;margin:0 auto;padding:16px}
+
+/* 上传区 */
+.upload-zone{border:2px dashed #ccc;border-radius:12px;padding:40px 20px;text-align:center;background:#fff;cursor:pointer;transition:.2s;margin-bottom:16px}
+.upload-zone:hover,.upload-zone.dragover{border-color:#1a73e8;background:#e8f0fe}
+.upload-zone .icon{font-size:48px;margin-bottom:12px}
+.upload-zone .text{color:#666;font-size:15px}
+.upload-zone .hint{color:#999;font-size:13px;margin-top:8px}
+
+/* 预览区 */
+.preview{margin-bottom:16px}
+.preview-list{display:flex;flex-wrap:wrap;gap:8px}
+.preview-item{position:relative;width:80px;height:110px;border-radius:8px;overflow:hidden;border:2px solid #e0e0e0;background:#fff}
+.preview-item img{width:100%;height:100%;object-fit:cover}
+.preview-item .remove{position:absolute;top:2px;right:2px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:14px;cursor:pointer;line-height:22px;text-align:center}
+.preview-item .name{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:10px;padding:2px 4px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:17px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-primary{background:#1a73e8;color:#fff}
+.btn-primary:hover{background:#1557b0}
+.btn-primary:disabled{background:#93b8f0;cursor:not-allowed}
+.btn-outline{background:#fff;color:#1a73e8;border:2px solid #1a73e8;margin-top:8px}
+
+/* 进度 */
+.progress{display:none;text-align:center;padding:24px}
+.progress .spinner{width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress .status{color:#666;font-size:14px}
+
+/* 结果 */
+.results{display:none}
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:16px}
+.card{background:#fff;border-radius:10px;padding:14px;cursor:pointer;transition:.15s}
+.card:hover{box-shadow:0 2px 12px rgba(0,0,0,.1)}
+.card .student{font-weight:600;font-size:15px;margin-bottom:8px}
+.card .stats{display:flex;gap:12px;font-size:13px;color:#666}
+.card .correct{color:#0a0}
+.card .wrong{color:#d00}
+.card .uncertain{color:#e90}
+.card .rate{font-size:22px;font-weight:700;color:#1a73e8;margin-top:6px}
+
+/* 详情弹窗 */
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;overflow-y:auto}
+.modal.active{display:flex;align-items:flex-start;justify-content:center;padding:20px}
+.modal-content{background:#fff;border-radius:16px;width:100%;max-width:700px;margin-top:20px;max-height:85vh;overflow-y:auto}
+.modal-header{position:sticky;top:0;background:#fff;padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;z-index:1}
+.modal-header h3{margin:0}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#999}
+.modal-body{padding:16px 20px}
+.detail-table{width:100%;border-collapse:collapse;font-size:13px}
+.detail-table th{background:#f5f5f5;padding:8px;text-align:left;position:sticky;top:56px}
+.detail-table td{padding:8px;border-bottom:1px solid #f0f0f0}
+.detail-table tr.wrong td{background:#fff0f0}
+.detail-table tr.uncertain td{background:#fffbe6}
+
+.highlight{color:#d00;font-weight:600}
+
+/* 响应式 */
+@media(max-width:600px){
+  .container{padding:10px}
+  .upload-zone{padding:30px 16px}
+  .summary-cards{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="header">英语听写批改工具</div>
+
+<div class="container">
+  <!-- 上传 -->
+  <div class="upload-zone" id="uploadZone">
+    <div class="icon">📄</div>
+    <div class="text">点击上传或拖拽听写纸照片<br>（手机也可拍照上传）</div>
+    <div class="hint">支持多张同时上传，JPG/PNG</div>
+  </div>
+  <input type="file" id="fileInput" accept="image/*" multiple capture="environment" style="display:none">
+
+  <!-- 预览 -->
+  <div class="preview" id="preview" style="display:none">
+    <div class="preview-list" id="previewList"></div>
+  </div>
+
+  <!-- 按钮 -->
+  <button class="btn btn-primary" id="gradeBtn" disabled>开始批改 (<span id="count">0</span> 张)</button>
+
+  <!-- 进度 -->
+  <div class="progress" id="progress">
+    <div class="spinner"></div>
+    <div class="status">正在批改中，请稍候...</div>
+  </div>
+
+  <!-- 结果 -->
+  <div class="results" id="results">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn btn-outline" id="excelBtn" style="width:auto;flex:1;min-width:140px">下载 Excel 汇总</button>
+      <button class="btn btn-outline" id="resetBtn" style="width:auto;flex:1;min-width:140px">重新批改</button>
+    </div>
+    <div class="summary-cards" id="cards"></div>
+  </div>
+</div>
+
+<!-- 详情弹窗 -->
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle"></h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+let files = [];
+
+const zone = document.getElementById('uploadZone');
+const input = document.getElementById('fileInput');
+const preview = document.getElementById('preview');
+const previewList = document.getElementById('previewList');
+const gradeBtn = document.getElementById('gradeBtn');
+const countEl = document.getElementById('count');
+const progress = document.getElementById('progress');
+const results = document.getElementById('results');
+const cards = document.getElementById('cards');
+
+zone.addEventListener('click', () => input.click());
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+input.addEventListener('change', () => handleFiles(input.files));
+
+function handleFiles(flist) {
+  for (let f of flist) {
+    if (f.type.startsWith('image/')) files.push(f);
+  }
+  renderPreview();
+}
+
+function renderPreview() {
+  if (files.length === 0) {
+    preview.style.display = 'none';
+    gradeBtn.disabled = true;
+  } else {
+    preview.style.display = 'block';
+    gradeBtn.disabled = false;
+  }
+  countEl.textContent = files.length;
+
+  previewList.innerHTML = '';
+  files.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'preview-item';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    div.appendChild(img);
+    const rm = document.createElement('button');
+    rm.className = 'remove';
+    rm.textContent = '×';
+    rm.onclick = (e) => { e.stopPropagation(); files.splice(i,1); renderPreview(); };
+    div.appendChild(rm);
+    const nm = document.createElement('div');
+    nm.className = 'name';
+    nm.textContent = f.name;
+    div.appendChild(nm);
+    previewList.appendChild(div);
+  });
+}
+
+gradeBtn.addEventListener('click', async () => {
+  if (files.length === 0) return;
+
+  results.style.display = 'none';
+  progress.style.display = 'block';
+  gradeBtn.style.display = 'none';
+
+  const form = new FormData();
+  files.forEach(f => form.append('files', f));
+
+  let data;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const resp = await fetch('/api/grade', { method: 'POST', body: form });
+      data = await resp.json();
+      break;
+    } catch (err) {
+      if (attempt === 0) {
+        document.querySelector('.progress .status').textContent = '连接异常，正在重试...';
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+      progress.style.display = 'none';
+      gradeBtn.style.display = 'block';
+      alert('批改失败: ' + err.message);
+      return;
+    }
+  }
+
+  progress.style.display = 'none';
+  results.style.display = 'block';
+  gradeBtn.style.display = 'block';
+  gradeBtn.disabled = true;
+
+  if (data && !data.success && data.errors.length > 0) {
+    alert('部分图片批改失败: ' + data.errors.map(e => e.name + ': ' + e.error).join('\n'));
+  }
+  renderResults(data);
+});
+
+function renderResults(data) {
+  cards.innerHTML = '';
+  if (!data.summary || data.summary.length === 0) {
+    cards.innerHTML = '<p>未识别到任何结果</p>';
+    return;
+  }
+
+  // 汇总统计
+  let totalCorrect = 0, totalWrong = 0, totalAll = 0;
+  let freqErrors = {};
+
+  data.summary.forEach(s => {
+    totalCorrect += s.correct;
+    totalWrong += s.wrong;
+    totalAll += s.total;
+    (s.details || []).forEach(d => {
+      if (d['判定'] === '错') {
+        const key = d['英文'] + ' → ' + d['正确翻译'];
+        freqErrors[key] = (freqErrors[key] || 0) + 1;
+      }
+    });
+  });
+
+  // 头部汇总
+  const headerDiv = document.createElement('div');
+  headerDiv.style.cssText = 'background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;text-align:center';
+  headerDiv.innerHTML = `
+    <div style="font-size:14px;color:#666;margin-bottom:4px">全班批改汇总</div>
+    <div style="font-size:28px;font-weight:700;color:#1a73e8">${totalAll > 0 ? (totalCorrect/totalAll*100).toFixed(1) : 0}%</div>
+    <div style="font-size:13px;color:#666;margin-top:4px">
+      共 ${totalAll} 题 | <span style="color:#0a0">对 ${totalCorrect}</span> | <span style="color:#d00">错 ${totalWrong}</span>
+    </div>
+  `;
+  cards.appendChild(headerDiv);
+
+  // 高频错词
+  if (Object.keys(freqErrors).length > 0) {
+    const topErrors = Object.entries(freqErrors).sort((a,b) => b[1]-a[1]).slice(0,8);
+    const freqDiv = document.createElement('div');
+    freqDiv.style.cssText = 'background:#fff3f3;border-radius:10px;padding:14px;margin-bottom:12px';
+    freqDiv.innerHTML = '<div style="font-weight:600;margin-bottom:8px;font-size:14px">高频错词 TOP ' + topErrors.length + '</div>' +
+      topErrors.map(([w,c]) => `<div style="padding:4px 0;font-size:13px"><span style="color:#d00;font-weight:600">${c}人</span> 错 ${w}</div>`).join('');
+    cards.appendChild(freqDiv);
+  }
+
+  // 学生卡片
+  data.summary.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => showDetail(s);
+    card.innerHTML = `
+      <div class="student">${s.name}</div>
+      <div class="stats">
+        <span class="correct">对 ${s.correct}</span>
+        <span class="wrong">错 ${s.wrong}</span>
+        <span class="uncertain">存疑 ${s.uncertain}</span>
+      </div>
+      <div class="rate">${s.rate}</div>
+    `;
+    cards.appendChild(card);
+  });
+
+  // Excel 下载
+  document.getElementById('excelBtn').onclick = () => window.open('/api/excel', '_blank');
+  document.getElementById('resetBtn').onclick = () => {
+    files = [];
+    input.value = '';  // 清空 file input，否则再次选相同文件无反应
+    renderPreview();
+    results.style.display = 'none';
+    gradeBtn.style.display = 'block';
+    gradeBtn.disabled = true;
+  };
+}
+
+function showDetail(student) {
+  document.getElementById('modalTitle').textContent = student.name + ' - 批改详情';
+  let html = '<table class="detail-table"><tr><th>题号</th><th>英文</th><th>正确翻译</th><th>学生写了</th><th>判定</th></tr>';
+  (student.details || []).sort((a,b) => a['题号'] - b['题号']).forEach(d => {
+    let cls = '';
+    if (d['判定'] === '错') cls = 'wrong';
+    else if (d['判定'] === '存疑') cls = 'uncertain';
+    const judge = d['判定'] === '错' ? '<span class="highlight">错</span>' :
+                  d['判定'] === '存疑' ? '存疑' : '对';
+    html += `<tr class="${cls}">
+      <td>${d['题号']}</td>
+      <td>${d['英文']}</td>
+      <td>${d['正确翻译']}</td>
+      <td>${d['学生写了']}</td>
+      <td>${judge}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

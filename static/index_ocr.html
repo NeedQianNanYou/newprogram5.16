@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>听写批改 OCR版</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f2f5;color:#333;min-height:100vh}
+.header{background:#1a73e8;color:#fff;padding:16px 20px;text-align:center;font-size:20px;font-weight:600}
+.container{max-width:900px;margin:0 auto;padding:16px}
+
+.section{background:#fff;border-radius:10px;padding:14px 16px;margin-bottom:12px}
+.section h3{font-size:14px;margin-bottom:8px}
+
+.upload-zone{border:2px dashed #ccc;border-radius:10px;padding:28px 16px;text-align:center;cursor:pointer;transition:.2s}
+.upload-zone:hover{border-color:#1a73e8;background:#e8f0fe}
+.upload-zone .icon{font-size:36px;margin-bottom:6px}
+.upload-zone .text{color:#666;font-size:14px}
+.upload-zone .hint{color:#999;font-size:12px;margin-top:4px}
+
+.preview-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.preview-item{position:relative;width:70px;height:98px;border-radius:6px;overflow:hidden;border:2px solid #e0e0e0}
+.preview-item img{width:100%;height:100%;object-fit:cover}
+.preview-item .remove{position:absolute;top:1px;right:1px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;font-size:12px;cursor:pointer;line-height:20px;text-align:center}
+.preview-item .name{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);color:#fff;font-size:9px;padding:2px 4px;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.btn{display:block;width:100%;padding:14px;border:none;border-radius:10px;font-size:17px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-primary{background:#1a73e8;color:#fff}
+.btn-primary:hover{background:#1557b0}
+.btn-primary:disabled{background:#93b8f0;cursor:not-allowed}
+.btn-outline{background:#fff;color:#1a73e8;border:2px solid #1a73e8;margin-top:8px;padding:12px;font-size:15px}
+
+.progress{display:none;text-align:center;padding:24px}
+.spinner{width:36px;height:36px;border:4px solid #e0e0e0;border-top-color:#1a73e8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.progress .status{color:#666;font-size:14px}
+
+.results{display:none}
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+.card{background:#fff;border-radius:10px;padding:12px;cursor:pointer;transition:.15s}
+.card:hover{box-shadow:0 2px 12px rgba(0,0,0,.1)}
+.card .sname{font-weight:600;font-size:14px;margin-bottom:6px}
+.card .stats{display:flex;gap:10px;font-size:12px;color:#666}
+.card .stats .c{color:#0a0}.card .stats .w{color:#d00}.card .stats .u{color:#e90}
+.card .rate{font-size:20px;font-weight:700;color:#1a73e8;margin-top:4px}
+
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100}
+.modal.active{display:flex;align-items:flex-start;justify-content:center;padding:16px}
+.modal-content{background:#fff;border-radius:16px;width:100%;max-width:700px;max-height:85vh;overflow-y:auto}
+.modal-header{position:sticky;top:0;background:#fff;padding:14px 18px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+.modal-header h3{font-size:15px}
+.modal-close{background:none;border:none;font-size:22px;cursor:pointer;color:#999}
+.modal-body{padding:12px 16px}
+
+.detail-table{width:100%;border-collapse:collapse;font-size:12px}
+.detail-table th{background:#f5f5f5;padding:6px 4px;text-align:left;font-size:11px}
+.detail-table td{padding:6px 4px;border-bottom:1px solid #f0f0f0}
+.detail-table tr.w td{background:#fff0f0}
+.detail-table tr.q td{background:#fffbe6}
+
+.hint-text{font-size:12px;color:#999;padding:8px 0}
+</style>
+</head>
+<body>
+
+<div class="header">听写批改 · OCR版</div>
+
+<div class="container">
+  <!-- 使用说明 -->
+  <div class="section" style="font-size:13px">
+    <strong>使用流程：</strong>
+    第一张上传<u>已填正确答案的听写纸</u>（老师版答案），后面上传学生听写纸。
+    没有答案纸时 AI 自动判断对错。有答案纸更准确。
+  </div>
+
+  <!-- 上传区 -->
+  <div class="section">
+    <div class="upload-zone" id="uploadZone">
+      <div class="icon">&#128206;</div>
+      <div class="text">上传听写纸照片</div>
+      <div class="hint">第一张为答案纸（可选），后续为学生纸</div>
+    </div>
+    <input type="file" id="fileInput" accept="image/*" multiple capture="environment" style="display:none">
+    <div class="preview-list" id="previewList"></div>
+  </div>
+
+  <button class="btn btn-primary" id="gradeBtn" disabled>开始批改 (<span id="count">0</span> 张)</button>
+
+  <div class="progress" id="progress">
+    <div class="spinner"></div>
+    <div class="status">正在识别中...</div>
+  </div>
+
+  <div class="results" id="results">
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <button class="btn btn-outline" id="excelBtn" style="flex:1;min-width:140px">下载 Excel</button>
+      <button class="btn btn-outline" id="resetBtn" style="flex:1;min-width:140px">重新批改</button>
+    </div>
+    <div id="globalSummary" style="background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center"></div>
+    <div class="summary-cards" id="cards"></div>
+  </div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle"></h3>
+      <button class="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+let files = [];
+
+const zone = document.getElementById('uploadZone');
+const input = document.getElementById('fileInput');
+const previewList = document.getElementById('previewList');
+const gradeBtn = document.getElementById('gradeBtn');
+const countEl = document.getElementById('count');
+const progress = document.getElementById('progress');
+const results = document.getElementById('results');
+const cards = document.getElementById('cards');
+const globalSummary = document.getElementById('globalSummary');
+
+zone.addEventListener('click', () => input.click());
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('dragover');
+  handleFiles(e.dataTransfer.files);
+});
+input.addEventListener('change', () => handleFiles(input.files));
+
+function handleFiles(flist) {
+  for (let f of flist) {
+    if (f.type.startsWith('image/')) files.push(f);
+  }
+  renderPreview();
+}
+
+function renderPreview() {
+  gradeBtn.disabled = files.length === 0;
+  countEl.textContent = files.length;
+  previewList.innerHTML = '';
+  files.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'preview-item';
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    div.appendChild(img);
+    const label = document.createElement('div');
+    label.className = 'name';
+    label.textContent = (i === 0) ? '📋 ' + f.name : f.name;
+    div.appendChild(label);
+    const rm = document.createElement('button');
+    rm.className = 'remove'; rm.textContent = '×';
+    rm.onclick = (e) => { e.stopPropagation(); files.splice(i,1); renderPreview(); };
+    div.appendChild(rm);
+    previewList.appendChild(div);
+  });
+}
+
+gradeBtn.addEventListener('click', async () => {
+  if (files.length === 0) return;
+  results.style.display = 'none';
+  progress.style.display = 'block';
+  gradeBtn.style.display = 'none';
+
+  const form = new FormData();
+  files.forEach(f => form.append('files', f));
+
+  try {
+    const resp = await fetch('/api/grade', { method: 'POST', body: form });
+    const data = await resp.json();
+    progress.style.display = 'none';
+    results.style.display = 'block';
+    gradeBtn.style.display = 'block';
+    gradeBtn.disabled = true;
+    if (!data.success) {
+      alert('批改失败: ' + (data.errors[0]?.error || '未知错误'));
+      return;
+    }
+    renderResults(data);
+  } catch (err) {
+    progress.style.display = 'none';
+    gradeBtn.style.display = 'block';
+    alert('请求失败: ' + err.message);
+  }
+});
+
+function renderResults(data) {
+  cards.innerHTML = '';
+  globalSummary.innerHTML = '';
+
+  const names = Object.keys(data.summary || {});
+  if (names.length === 0) {
+    globalSummary.innerHTML = '<div style="padding:20px;color:#999">无批改结果</div>';
+    return;
+  }
+
+  let totalCorrect = 0, totalAll = 0;
+  const freqErrors = {};
+
+  (data.summary || []).forEach(s => {
+    totalCorrect += s.correct;
+    totalAll += s.total;
+    (s.details || []).forEach(d => {
+      if (d['判定'] === '错') {
+        const key = d['正确翻译'] || '(空)';
+        freqErrors[key] = (freqErrors[key] || 0) + 1;
+      }
+    });
+  });
+
+  globalSummary.innerHTML = `
+    <div style="font-size:14px;color:#666">批改完成${data.answer_count ? '（词表：'+data.answer_count+'题）' : ''}</div>
+    <div style="font-size:24px;font-weight:700;color:#1a73e8;margin-top:4px">${totalAll>0 ? (totalCorrect/totalAll*100).toFixed(1) : 0}%</div>
+    <div style="font-size:13px;color:#666;margin-top:4px">共 ${totalAll} 题 | 对 ${totalCorrect}</div>
+  `;
+
+  if (Object.keys(freqErrors).length > 0) {
+    const top = Object.entries(freqErrors).sort((a,b)=>b[1]-a[1]).slice(0,8);
+    const div = document.createElement('div');
+    div.style.cssText = 'background:#fff3f3;border-radius:10px;padding:14px;margin-bottom:12px';
+    div.innerHTML = '<div style="font-weight:600;font-size:14px;margin-bottom:6px">高频错误</div>' +
+      top.map(([w,c])=>`<div style="font-size:13px;padding:3px 0"><span style="color:#d00;font-weight:600">${c}次</span> ${w}</div>`).join('');
+    cards.appendChild(div);
+  }
+
+  (data.summary || []).forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => showDetail(s);
+    card.innerHTML = `
+      <div class="sname">${s.name}</div>
+      <div class="stats">
+        <span class="c">对${s.correct}</span>
+        <span class="w">错${s.wrong}</span>
+        <span class="u">存疑${s.uncertain}</span>
+      </div>
+      <div class="rate">${s.rate}</div>
+    `;
+    cards.appendChild(card);
+  });
+
+  document.getElementById('excelBtn').onclick = () => window.open('/api/excel', '_blank');
+  document.getElementById('resetBtn').onclick = () => {
+    files = []; input.value = '';
+    renderPreview(); results.style.display = 'none'; gradeBtn.style.display = 'block';
+  };
+}
+
+function showDetail(s) {
+  document.getElementById('modalTitle').textContent = s.name + ' · ' + s.rate;
+  let html = '<table class="detail-table"><tr><th>题号</th><th>单词</th><th>学生答案</th><th>正确答案</th><th>判定</th></tr>';
+  (s.details||[]).forEach(d => {
+    const cls = d['判定']==='错'?'w':d['判定']==='存疑'?'q':'';
+    html += `<tr class="${cls}">
+      <td>${d['题号']}</td>
+      <td>${d['英文'] || ''}</td>
+      <td>${d['学生写了']}</td>
+      <td>${d['正确翻译']}</td>
+      <td>${d['判定']}</td>
+    </tr>`;
+  });
+  html += '</table>';
+  document.getElementById('modalBody').innerHTML = html;
+  document.getElementById('modal').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+}
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+</script>
+</body>
+</html>

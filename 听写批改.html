@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>听写批改</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#eee;min-height:100vh}
+.h{background:#16213e;padding:14px 20px;display:flex;justify-content:space-between;align-items:center}
+.h h1{font-size:17px}.h .st{font-size:12px;color:#8ab4f8}
+.c{margin:0 auto;max-width:900px;padding:14px}
+
+.tip{background:#2d1f0a;color:#ff9800;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:14px;line-height:1.6}
+.up{border:2px dashed #444;border-radius:10px;padding:34px;text-align:center;cursor:pointer;background:#16213e;margin-bottom:12px;transition:.2s}
+.up:hover{border-color:#8ab4f8}
+.up .ic{font-size:38px;margin-bottom:6px}.up .tx{color:#aaa;font-size:14px}.up .hi{color:#666;font-size:12px;margin-top:4px}
+.pl{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.pi{width:66px;height:92px;border-radius:6px;overflow:hidden;border:2px solid #333}
+.pi img{width:100%;height:100%;object-fit:cover}
+
+.btn{padding:14px 24px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+.b1{background:#8ab4f8;color:#1a1a2e;width:100%}.b1:hover{background:#a0c4ff}.b1:disabled{background:#444;color:#777;cursor:not-allowed}
+.b2{background:transparent;border:1px solid #555;color:#aaa;padding:10px 18px;font-size:13px}
+
+.pg{display:none;text-align:center;padding:30px}
+.sp{width:32px;height:32px;border:3px solid #333;border-top-color:#8ab4f8;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pgi{color:#888;font-size:12px;margin-top:4px}
+
+.sm{display:none;background:#16213e;border-radius:10px;padding:18px;margin-bottom:14px}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center}
+.si{padding:12px;border-radius:8px}.si .n{font-size:28px;font-weight:700}.si .l{font-size:11px;color:#888;margin-top:2px}
+.gn{background:#0a3d1a}.gn .n{color:#4caf50}
+.ye{background:#3d2a0a}.ye .n{color:#ff9800}
+.rd{background:#3d0a0a}.rd .n{color:#f44336}
+
+.sl{display:none}
+.sc{background:#16213e;border-radius:8px;padding:14px 16px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;cursor:pointer}.sc:hover{background:#1e2d50}
+.sc .sn{font-weight:600;font-size:14px}.sc .si2{font-size:12px;color:#888}
+.sc .st2{text-align:right}.sc .st2 .td{color:#ff9800;font-weight:600;font-size:13px}
+
+.modal{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:#1a1a2e;z-index:100;flex-direction:column}
+.modal.on{display:flex}
+.mh{background:#16213e;padding:12px 18px;display:flex;justify-content:space-between;align-items:center}
+.mp{background:#333;height:3px}.mpb{background:#8ab4f8;height:100%;transition:.3s}
+.mb{flex:1;overflow-y:auto;padding:18px;max-width:680px;margin:0 auto;width:100%}
+.mi{background:#16213e;border-radius:8px;padding:18px;margin-bottom:10px;border-left:4px solid #ff9800}
+.mi .qn{font-size:11px;color:#888;margin-bottom:6px}
+.mi .wd{font-size:20px;font-weight:700;margin-bottom:2px}
+.mi .cz{font-size:15px;color:#4caf50;margin-bottom:10px}
+.mi .sw{font-size:15px;padding:8px 12px;background:#0d1117;border-radius:6px;margin-bottom:10px}
+.mi .sw.er{color:#f44336}.mi .sw.ok{color:#4caf50}
+.ma{display:flex;gap:8px}
+.bw{flex:1;background:#f44336;color:#fff}.bw:hover{background:#d32f2f}
+.bg{flex:1;background:#4caf50;color:#fff}.bg:hover{background:#388e3c}
+.bs{background:#555;color:#ccc}.bs:hover{background:#666}
+.mf{background:#16213e;padding:12px 18px;text-align:center}
+.emp{text-align:center;padding:50px;color:#888}.emp .bi{font-size:42px}
+
+.btns{display:flex;gap:8px;margin-bottom:14px}
+.btns .btn{flex:1;font-size:13px;padding:10px}
+
+@media(max-width:600px){.c{padding:10px}.mi{padding:14px}.sg{grid-template-columns:repeat(3,1fr);gap:6px}}
+</style>
+</head>
+<body>
+
+<div class="h"><h1>听写批改 · AI初筛</h1><span class="st" id="hs"></span></div>
+<div class="c">
+  <div class="tip">AI 先判全部题，<b>对的自动过</b>。你只复核<b>错题和存疑</b>，键盘 <b>← →</b> 快速判定。</div>
+  <div class="up" id="up"><div class="ic">📄</div><div class="tx">上传听写纸照片（可多张）</div><div class="hi">手机/电脑均可</div></div>
+  <input type="file" id="fi" accept="image/*" multiple capture="environment" style="display:none">
+  <div class="pl" id="pl"></div>
+  <button class="btn b1" id="gb" disabled>AI 初筛 (<span id="ct">0</span> 张)</button>
+  <div class="pg" id="pg"><div class="sp"></div><div style="color:#aaa;font-size:13px">AI 正在判题...</div><div class="pgi" id="pgi"></div></div>
+  <div class="sm" id="sm"></div>
+  <div class="btns" id="btns" style="display:none"><button class="btn b2" onclick="dlExcel()">下载 Excel</button><button class="btn b2" onclick="reset()">重新批改</button></div>
+  <div class="sl" id="sl"></div>
+</div>
+
+<div class="modal" id="mo">
+  <div class="mh"><h3 id="mt"></h3><button class="btn b2" onclick="cl()">返回列表</button></div>
+  <div class="mp"><div class="mpb" id="mb" style="width:0%"></div></div>
+  <div class="mb" id="my"></div>
+  <div class="mf"><button class="btn b2" onclick="cl()">完成复核</button></div>
+</div>
+
+<script>
+const AK='sk-192cfaad824843d29be8e8192cd34037';
+const AB='https://dashscope.aliyuncs.com/compatible-mode/v1';
+const MD='qwen-vl-plus';
+let files=[],allR={},rv={};
+
+const up=document.getElementById('up'),fi=document.getElementById('fi'),pl=document.getElementById('pl');
+const gb=document.getElementById('gb'),ct=document.getElementById('ct'),pg=document.getElementById('pg'),pgi=document.getElementById('pgi');
+const sm=document.getElementById('sm'),sl=document.getElementById('sl'),btns=document.getElementById('btns');
+
+up.onclick=()=>fi.click();
+up.ondragover=e=>{e.preventDefault();up.style.borderColor='#8ab4f8'};
+up.ondragleave=()=>up.style.borderColor='#444';
+up.ondrop=e=>{e.preventDefault();up.style.borderColor='#444';addFiles(e.dataTransfer.files)};
+fi.onchange=()=>addFiles(fi.files);
+
+function addFiles(fl){for(let f of fl)if(f.type.startsWith('image/'))files.push(f);render()}
+function render(){
+  pl.innerHTML='';files.forEach(f=>{
+    const d=document.createElement('div');d.className='pi';
+    const img=document.createElement('img');img.src=URL.createObjectURL(f);d.appendChild(img);pl.appendChild(d);
+  });
+  gb.disabled=!files.length;ct.textContent=files.length;
+}
+function reset(){files=[];fi.value='';allR={};rv={};render();sm.style.display='none';sl.style.display='none';btns.style.display='none';gb.style.display='block';gb.disabled=true}
+
+// === AI ===
+function splitImg(file,n){
+  return new Promise((ok,no)=>{
+    const r=new FileReader();r.onload=()=>{const img=new Image();
+      img.onload=()=>{const w=img.naturalWidth,h=img.naturalHeight,cw=Math.floor(w/n);
+        const cv=document.createElement('canvas');cv.height=h;const ctx=cv.getContext('2d');
+        const res=[];for(let i=0;i<n;i++){
+          const l=i*cw,r2=i<n-1?(i+1)*cw:w;cv.width=r2-l;
+          ctx.drawImage(img,l,0,r2-l,h,0,0,r2-l,h);res.push(cv.toDataURL('image/jpeg',0.9));
+        }ok(res);};img.onerror=no;img.src=r.result;};r.onerror=no;r.readAsDataURL(file);
+  });
+}
+
+async function call(imgB64,prompt){
+  const b=JSON.stringify({model:MD,max_tokens:8192,messages:[{role:'user',content:[{type:'image_url',image_url:{url:imgB64}},{type:'text',text:prompt}]}]});
+  const r=await fetch(AB+'/chat/completions',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+AK},body:b});
+  if(!r.ok)throw new Error('API '+r.status);
+  const d=await r.json();let raw=d.choices[0].message.content.trim();
+  if(raw.startsWith('```'))raw=raw.split('\n').slice(1,-1).join('\n');
+  return JSON.parse(raw);
+}
+
+async function gradeOne(file){
+  const cols=await splitImg(file,3);
+  const rs=await Promise.all(cols.map((c,i)=>{
+    const s=i*33+1,e=(i+1)*33;
+    return call(c,'你是英语批改员。听写纸第'+(i+1)+'/3列（题号'+s+'-'+e+'）。每题印刷英文，学生手写中文翻译。逐字辨认手写内容如实记录，严禁因为认识英文就直接抄正确答案。近义词算对。看不清→存疑。返回JSON：[{"题号":'+s+',"英文":"apple","正确翻译":"苹果","学生写了":"苹果","判定":"对"},...]');
+  }));
+  const all=[];for(const r of rs)if(Array.isArray(r))all.push(...r);return all;
+}
+
+// === UI ===
+gb.onclick=async()=>{
+  if(!files.length)return;
+  sm.style.display='none';sl.style.display='none';btns.style.display='none';pg.style.display='block';gb.style.display='none';allR={};rv={};
+  for(let i=0;i<files.length;i++){
+    const f=files[i],nm=f.name.replace(/\.[^.]+$/,'');pgi.textContent='正在: '+nm+' ('+(i+1)+'/'+files.length+')';
+    try{allR[nm]=await gradeOne(f);rv[nm]={}}catch(e){console.error(nm,e);allR[nm]=[]}
+  }
+  pg.style.display='none';gb.style.display='block';gb.disabled=true;show();
+};
+
+function show(){
+  sm.style.display='block';sl.style.display='block';btns.style.display='flex';
+  let tc=0,tr=0,tt=0;
+  Object.values(allR).forEach(d=>d.forEach(x=>{tt++;if(x['判定']==='对')tc++;else tr++}));
+  document.getElementById('hs').textContent=tc+'题自动通过 · '+tr+'题待复核';
+  sm.innerHTML='<div class="sg"><div class="si gn"><div class="n">'+tc+'</div><div class="l">自动通过（不看了）</div></div><div class="si ye"><div class="n">'+tr+'</div><div class="l">待你复核</div></div><div class="si rd"><div class="n">'+(tt?(tr/tt*100).toFixed(0):0)+'%</div><div class="l">需看比例</div></div></div>';
+  sl.innerHTML='<div style="font-weight:600;margin-bottom:8px">学生列表 · 点击进入复核</div>';
+  Object.entries(allR).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([nm,dt])=>{
+    const tr2=dt.filter(d=>d['判定']!=='对').length;
+    const done=Object.keys(rv[nm]||{}).length;
+    const d=document.createElement('div');d.className='sc';
+    d.onclick=()=>open(nm);
+    d.innerHTML='<div><div class="sn">'+nm+'</div><div class="si2">共'+dt.length+'题 · AI判对'+(dt.length-tr2)+'题</div></div><div class="st2">'+(tr2>0?'<div class="td">'+(tr2-done)+'题待复核</div>':'<div style="color:#4caf50">✓ 完成</div>')+'</div>';
+    sl.appendChild(d);
+  });
+}
+
+let curN,curI;
+function open(nm){curN=nm;curI=0;document.getElementById('mo').classList.add('on');document.getElementById('mt').textContent=nm;next();}
+function cl(){document.getElementById('mo').classList.remove('on');show()}
+function items(){return (allR[curN]||[]).filter(d=>d['判定']!=='对')}
+
+function next(){
+  const it=items();const mb=document.getElementById('mb'),my=document.getElementById('my');
+  if(!it.length||curI>=it.length){mb.style.width='100%';my.innerHTML='<div class="emp"><div class="bi">✓</div>全部复核完成</div>';return}
+  mb.style.width=(curI/it.length*100)+'%';
+  const d=it[curI];
+  my.innerHTML='<div style="color:#888;font-size:12px;margin-bottom:8px">'+(curI+1)+' / '+it.length+'</div><div class="mi"><div class="qn">第 '+d['题号']+' 题</div><div class="wd">'+(d['英文']||'')+'</div><div class="cz">正确答案：'+(d['正确翻译']||'')+'</div><div class="sw '+(d['判定']==='错'?'er':'ok')+'">学生写了：'+(d['学生写了']||'')+'</div><div style="color:#888;font-size:11px;margin-bottom:10px">AI判定：'+d['判定']+'</div><div class="ma"><button class="btn bw" onclick="ok(\'错\')">✗ 确认错误</button><button class="btn bg" onclick="ok(\'对\')">✓ 改判正确</button><button class="btn bs" style="padding:10px 16px;font-size:13px" onclick="skip()">跳过</button></div></div>';
+}
+
+function ok(j){const it=items();if(curI>=it.length)return;const d=it[curI];rv[curN]=rv[curN]||{};rv[curN][d['题号']]=j;const idx=allR[curN].findIndex(x=>x['题号']===d['题号']);if(idx>=0)allR[curN][idx]['判定']=j;curI++;next()}
+function skip(){curI++;next()}
+document.onkeydown=e=>{if(!document.getElementById('mo').classList.contains('on'))return;if(e.key==='ArrowLeft')ok('错');else if(e.key==='ArrowRight')ok('对');else if(e.key===' '||e.key==='ArrowDown'){e.preventDefault();skip()}};
+
+// === Excel ===
+function dlExcel(){
+  const wb=XLSX.utils.book_new();
+  const sd=[['学生','总题数','正确','错误','存疑','正确率']];
+  Object.entries(allR).forEach(([nm,dt])=>{
+    const t=dt.length,c=dt.filter(d=>d['判定']==='对').length,w=dt.filter(d=>d['判定']==='错').length,u=dt.filter(d=>d['判定']==='存疑').length;
+    sd.push([nm,t,c,w,u,t?(c/t*100).toFixed(1)+'%':'0%']);
+  });
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(sd),'汇总');
+
+  const dd=[['学生','题号','英文','正确翻译','学生写了','判定']];
+  Object.entries(allR).forEach(([nm,dt])=>dt.sort((a,b)=>a['题号']-b['题号']).forEach(d=>dd.push([nm,d['题号'],d['英文']||'',d['正确翻译']||'',d['学生写了']||'',d['判定']])));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(dd),'逐题详情');
+
+  const fe={};Object.values(allR).forEach(dt=>dt.forEach(d=>{if(d['判定']==='错'){const k=d['正确翻译']||'(空)';fe[k]=(fe[k]||0)+1}}));
+  const fd=[['错误答案','次数']];Object.entries(fe).sort((a,b)=>b[1]-a[1]).forEach(([w,c])=>fd.push([w,c]));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(fd),'高频错误');
+
+  XLSX.writeFile(wb,'听写批改结果.xlsx');
+}
+</script>
+</body>
+</html>
