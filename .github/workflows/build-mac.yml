@@ -1,0 +1,55 @@
+name: 打包 Mac 安装包
+
+on:
+  workflow_dispatch:  # 手动触发、推送时自动构建
+  push:
+    paths:
+      - 'server.py'
+      - 'static/**'
+      - '.env'
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: pip install pyinstaller fastapi uvicorn pillow openai
+
+      - name: Build App
+        run: |
+          pyinstaller --onedir \
+            --add-data "static:static" \
+            --add-data ".env:." \
+            --name "听写批改" \
+            --noconsole \
+            server.py
+
+          # 创建启动脚本
+          cat > dist/听写批改/启动.command << 'SCRIPT'
+          #!/bin/bash
+          cd "$(dirname "$0")"
+          ./听写批改 &
+          sleep 2
+          open http://localhost:8765
+          SCRIPT
+          chmod +x dist/听写批改/启动.command
+
+      - name: Package DMG
+        run: |
+          hdiutil create -volname "听写批改" \
+            -srcfolder "dist/听写批改" \
+            -ov -format UDZO \
+            "dist/听写批改-Mac.dmg"
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: 听写批改-Mac版
+          path: dist/听写批改-Mac.dmg
