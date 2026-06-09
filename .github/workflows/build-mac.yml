@@ -1,12 +1,11 @@
 name: 打包 Mac 安装包
 
 on:
-  workflow_dispatch:  # 手动触发、推送时自动构建
+  workflow_dispatch:
   push:
     paths:
       - 'server.py'
       - 'static/**'
-      - '.env'
 
 jobs:
   build:
@@ -24,6 +23,9 @@ jobs:
 
       - name: Build App
         run: |
+          # 从 GitHub Secret 创建 .env 文件
+          echo "DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}" > .env
+
           pyinstaller --onedir \
             --add-data "static:static" \
             --add-data ".env:." \
@@ -31,7 +33,6 @@ jobs:
             --noconsole \
             server.py
 
-          # 创建启动脚本
           cat > dist/听写批改/启动.command << 'SCRIPT'
           #!/bin/bash
           cd "$(dirname "$0")"
