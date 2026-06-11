@@ -12,8 +12,14 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 import uvicorn
 
-# Config
-env_path = Path(__file__).parent / ".env"
+# Config: 兼容 PyInstaller 打包和源码运行
+import sys
+if getattr(sys, 'frozen', False):
+    BASE = Path(sys._MEIPASS)  # PyInstaller
+else:
+    BASE = Path(__file__).parent  # 源码运行
+
+env_path = BASE / ".env"
 if env_path.exists():
     with open(env_path, "r", encoding="utf-8") as f:
         for line in f:
@@ -27,7 +33,7 @@ API_KEY = os.environ.get("DASHSCOPE_API_KEY", "")
 MODEL = "qwen-vl-plus"
 client = OpenAI(api_key=API_KEY, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
-FRONTEND = (Path(__file__).parent / "static" / "review.html").read_text(encoding="utf-8")
+FRONTEND = (BASE / "static" / "review.html").read_text(encoding="utf-8")
 
 app = FastAPI()
 
@@ -50,20 +56,23 @@ def split_cols(img, n=3):
 def grade_col(i, col_img):
     b = b64(col_img)
     s, e = i*33+1, (i+1)*33
-    prompt = f"""你是英语批改员。这是听写纸第{i+1}/3列，题号{s}到{e}，印刷英文单词，右侧学生手写中文翻译。
+    prompt = f"""你是英语听写批改员。严格按照以下两步执行：
 
-【关键要求】
-1. 逐字辨认手写中文——横竖撇捺都要看清，不要一眼扫过就抄正确翻译
-2. 学生写的≠正确翻译。先看学生写了什么，再判断对错
-3. 潦草字要仔细辨认，宁可标"存疑"不要猜
-4. 禁止因为认识英文单词就直接脑补正确翻译到"学生写了"
+【步骤1：逐字识别】先不看答案，逐题仔细看图片，依次读出：
+- 题号（印刷数字）
+- 英文单词（印刷体，如实抄下来）
+- 学生手写的中文（一个字一个字辨认，写的是什么就记录什么。如果看不清，填"看不清"）
 
-【判题标准】
-学生写的中文和英文单词真实意思一致→对对"
-明显错误→"错"
-看不清/空白→"存疑"
+【步骤2：翻译对比】对于步骤1中读出的每道题，用你的知识给出英文单词的正确中文翻译，然后和步骤1中读出的学生手写内容对比：
+- 意思一致或相近→"对"
+- 明显不同→"错"
+- 学生留空或看不清→"存疑"
 
-返回纯JSON：[{{"题号":{s},"英文":"...","正确翻译":"...","学生写了":"...","判定":"对/错/存疑"}}]"""
+【核心禁止事项】
+- 严禁把"正确翻译"直接抄到"学生写了"！！学生写的是图片中手写的内容，正确翻译是你大脑中的知识，这是两回事
+- 如果图片不是听写纸，返回[]
+
+返回纯JSON：[{{"题号":{s},"英文":"...","正确翻译":"...","学生写了":"...","判定":"..."}}]，题号范围{s}到{e}"""
     for attempt in range(2):
         try:
             resp = client.chat.completions.create(
@@ -75,7 +84,10 @@ def grade_col(i, col_img):
             if raw.startswith("```"): raw = "\n".join(raw.split("\n")[1:-1])
             data = json.loads(raw)
             data = [d for d in data if s <= d.get("题号",0) <= e]
-            return data
+            seen = set(); uniq = []
+            for d in data:
+                if d["题号"] not in seen: seen.add(d["题号"]); uniq.append(d)
+            return uniq
         except Exception as ex:
             if attempt == 0: continue
             print(f"列{i+1}失败:{ex}"); return []
