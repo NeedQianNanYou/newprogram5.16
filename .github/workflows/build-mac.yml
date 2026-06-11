@@ -23,7 +23,6 @@ jobs:
 
       - name: Build App
         run: |
-          # 从 GitHub Secret 创建 .env 文件
           echo "DASHSCOPE_API_KEY=${{ secrets.DASHSCOPE_API_KEY }}" > .env
 
           pyinstaller --onedir \
@@ -32,6 +31,12 @@ jobs:
             --name "听写批改" \
             --noconsole \
             server.py
+
+          # Ad-hoc 签名，解决 macOS 库加载限制
+          cd dist/听写批改
+          codesign --force --deep --sign - _internal/Python.framework 2>/dev/null || true
+          codesign --force --deep --sign - 听写批改 2>/dev/null || true
+          cd ../..
 
           cat > dist/听写批改/启动.command << 'SCRIPT'
           #!/bin/bash
