@@ -29,7 +29,6 @@ jobs:
             --add-data "static:static" \
             --add-data ".env:." \
             --name "听写批改" \
-            --noconsole \
             server.py
 
           # Ad-hoc 签名，解决 macOS 库加载限制
